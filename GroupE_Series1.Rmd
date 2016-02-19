@@ -1,0 +1,83 @@
+---
+title: "Series1"
+author: "Group E"
+date: "February 18, 2016"
+output: pdf_document
+---
+
+```{r,echo=F,include=FALSE}
+library(xlsx)
+library(forecast)
+library(tseries)
+```
+
+##Preliminary Data Prep
+Load and prepare the data for analysis.
+```{r,echo=F,include=FALSE}
+setwd("/home/ab/Documents/MBD/time_series/TS_session10_ex/data")
+ts1 <- read.xlsx("Series1.xls",1)
+ts1 <- data.frame(ts1)[-1,]
+ts1.a <- ts1[,2][1:565] # returns
+ts1.b <- ts1[,3][1:565] #Moving Averages
+ts1.a = na.omit(ts1.a)
+ts1.b = na.omit(ts1.b)
+```
+
+##Step 1 - Visualise the Time Series and run an ACF and PACF.
+In this step, we check if the data is stationary in the mean and varience. This helps us determine what transformation might be required.
+```{r}
+tsdisplay(ts1.a, main = "Time Series, ACF & PCF for TS1")
+```
+
+```{r}
+tsdisplay(ts1.b, main = "Time Series, ACF & PCF for TS1 - MA")
+```
+
+##Step 2 - Analyze time series
+For Microsoft returns, we have what appears to be white noise: The mean is 0, the variance is constant and the ACF and PACF are both 0. This means that we cannot forecast with this time series. We can explore this a little further with the Box Test and Shapiro test to see if we have strict white noise or Guassian white noise.  
+```{r}
+ts1.a.bt = Box.test(ts1.a,lag=10) 
+ts1.a.bt$p.value # p-value is large, we do not reject the null of independence
+ts1.a.st = shapiro.test(ts1.a) 
+ts1.a.st$p.value # p-value is small, we reject the null of normality. 
+
+# It appears we have strict white noise but not Guassian white noise. 
+#Nontheless, we cannot create a valid model with white noise. We will leave this one here. 
+
+# Turning now to time series B (smoothed MA=3) we see from the graphs that it is already stationary. 
+#We can verify this with the Dickey Fuller Test. 
+
+ts1.b.adf = adf.test(ts1.b)
+ts1.b.adf$p.value # The p_value is small, we reject the null hypothesis that the series is non-stationary. 
+
+# Lets look at some models for time series B since we know it is stationary.
+# First we notice that our ACF and PACF graphs have lag cut-offs at ~3 and 1 respectively. 
+#Therefore lets try a (1,0,3) model. 
+b.fit <- arima(ts1.b, order = c(1,0,3)) 
+b.fit$aic # aic is low 
+```
+
+##Step 3 - Analyze Residuals
+```{r,echo=F,}
+# Lets look at the ACF and PACF of the residuals
+tsdisplay(b.fit$residuals)
+# Residuals appear to be white noise
+```
+
+Box Test and Shapiro Test for Residuals to check for independence and normality of residuals
+```{r,echo=F,}
+Box.test(b.fit$residuals, lag = 10) # p-value is high, cannot reject null of independence
+shapiro.test(b.fit$residuals) # p-value is small therefore we reject the null hypothesis of normality.
+# We have strict white noise but not guassian white noise
+```
+
+##Step 4 - Forecast
+Now we can make our predictions for the next 6 steps ahead 
+```{r,echo=F,fig.height=3 }
+ts1b.pred <- predict(b.fit, n.ahead = 6)
+as(ts1b.pred,"list")
+ts.plot(ts1.b)
+lines(ts1b.pred$pred+1.96*ts1b.pred$se,col="red",lty=3)
+lines(ts1b.pred$pred-1.96*ts1b.pred$se,col="red",lty=3)
+
+```

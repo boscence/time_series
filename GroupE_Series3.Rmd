@@ -1,0 +1,76 @@
+---
+title: "Series3"
+author: "Group E"
+date: "February 18, 2016"
+output: pdf_document
+---
+##Preliminary Data Prep
+Load and prepare the data for analysis. This includes taking 5 observations out of the data to be used to test the model accuracy. This hold-out series is called TS3No5.
+```{r, echo=FALSE,include=F}
+
+library(xlsx)
+library(e1071)
+library(dplyr)
+library(forecast)
+
+setwd("/home/ab/Documents/MBD/time_series/TS_session10_ex/data")
+TS3= read.xlsx("Series3.xls",1)
+TS3No5= as.data.frame(TS3[1:92,1:2])
+```
+
+##Step 1 - Visualise the Time Series
+In this step, we check if the data is stationary in the mean and varience. This helps us determine what transformation is required.
+We notice that the series is not stationary in the mean or the varience. In fact, there appears to be seasonaility, ACF and PACF showing a significant spike at every twelth value. 
+
+```{r,echo=F}
+X=TS3No5$SALES
+tsdisplay(X, main = "Monthly Clothes Sales",lag.max = 36)
+```
+
+Skewness & Kurtosis are test to help determine if the data is normal or not. 
+In normally distributed data, Skewness is 0 Kurtosis =is.
+```{r, echo=F}
+skewness(X, na.rm=TRUE)
+kurtosis(X, na.rm=TRUE)
+```
+
+##Step 2 - Model
+Given that the series is not stationary in the mean and there is seasonaility, we apply a model that accounts for both seasonaility and trend. The model below has coefficients different from 0.
+```{r}
+mod3 = arima(X, order=c(0,0,0), seasonal=list(order=c(1,0,0), period=12))
+mod3
+```
+
+##Step 3 - Check Residuals
+After we plot the residuals, we see the mode is still not stationary. We have missed a pattern in the data that helps explain the series.
+```{r}
+tsdisplay(mod3$residuals)
+```
+
+Using the residual plot from the first model, we fit the model below.
+```{r}
+mod3_1 =  arima(X,order = c(2, 1, 1), seasonal = list(order = c(2, 0, 1), period = 12))
+```
+
+##Step 4: Check if residuals are white noise
+Its residuals appear to be white noise.
+```{r}
+tsdisplay(mod3_1$residuals)
+```
+
+The P-Value above .05 in the Ljung Box test indicates there is no structure in the residuals.
+```{r}
+Box.test(mod3_1$residuals,lag = 36,type = 'Ljung')
+```
+
+The shapiro-test P-Value of greater than 0.05 indicates the residuals are normal. 
+```{r}
+shapiro.test(mod3_1$residuals)
+```
+
+##Step 5: Forecase
+```{r}
+plot(forecast(mod3_1))
+```
+
+

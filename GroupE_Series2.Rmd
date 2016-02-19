@@ -1,0 +1,103 @@
+---
+title: "Series2"
+author: "Group E"
+date: "February 18, 2016"
+output: pdf_document
+---
+
+##Preliminary Data Prep
+Load and prepare the data for analysis. This includes taking 5 observations out of the data to be used to test model accuracy. This hold-out series is called series2_ho.
+```{r,echo=F,include=FALSE}
+library(xlsx)
+library(tseries)
+library(forecast)
+setwd("/home/ab/Documents/MBD/time_series/TS_session10_ex/data")
+series2 = read.xlsx("Series2.xls", sheetName = "Series2")
+
+```
+
+```{r}
+dim(series2)
+series2_ho = series2[1:181,]
+```
+
+##Step 1 - Visualise the Time Series and run an ACF and PACF.
+In this step, we check if the data is stationary in the mean and varience. This helps us determine what transformation might be required. We notice that the series is not stationary in the mean because we see the mean changing over time (it is influenced over time). We also look at the ACF and PACF to further understand the data. We have further evidence that the series is not stationary, evident from the observations that lie outside of the confidence intervals.
+
+```{r,echo=F}
+tsdisplay(series2_ho$unemployed, main = "Figure 1 - US Unemployment")
+```
+
+We also come to this conclusion because of the high P-Value in the ADF test.
+The P-Value is 0.5518348, which is above 0.05.  
+```{r,echo=F,echo=F}
+ts2_adf = adf.test(series2_ho$unemployed[2:length(series2_ho$unemployed)], alternative = "stationary")
+ts2_adf$p.value
+```
+
+##Step 2 - Transform
+Given that the series is not stationary in the mean, we apply a difference transformation. From a visualisation of the transformed series, we see the series is now stationary. We can also verify with the Dickey Fuller Test. We see that the p-value is small and we can reject the null hypothesis of unstationarity. 
+```{r,echo=F}
+tsdisplay(diff(series2_ho$unemployed),main="Figure 2 - US Unemployment, Diff = 1")
+series_2_transformed = diff(series2_ho$unemployed)
+series_2_transformed_adf = adf.test(series_2_transformed,alternative = "stationary")
+series_2_transformed_adf$p.value # p-value is smaller than 0.01 which lets us know the transformed series is stationary. 
+```
+
+##Step 3 - Model and Check Residuals
+In determining the model to use, we use the results from the ACF and PACF for the model. We first tried a (2,1,0) model but found residuals outside the threshold limits. Therefore, we ran a (2,1,1) model which appears to be an appropriate model. In this model, all correlations are within the threshold limits as seen in the ACF and PACF functions. In addition the aic is smaller for the (2,1,1) model. 
+```{r}
+s2_mod1A = arima(series2_ho$unemployed,c(2,1,0)) # aic: 2029
+s2_mod1 = arima(series2_ho$unemployed,c(2,1,1)) # aic: 2025
+```
+
+```{r, echo=F}
+tsdisplay(s2_mod1$residuals, main = "Figure 3 - Series and ACF and PACF for the Residuals")
+```
+
+Furthermore, the Dicky Fuller test indicates that the model is stationary. 
+```{r,echo=F}
+s2_mod1_adf = adf.test(s2_mod1$residuals)
+s2_mod1_adf$p.value
+```
+
+##Step 4 - Are the Residuals SWN or GWN?
+The time series plot and the ACF and PACF plots indicate that the model residuals are white noise: ACF = 0, PACF = 0, mean = 0 and variance is constant. Now we wish to test for Strict White Noise (SWN) and Guassian White Noise (GWN). We will use the Box-Piece test to test for independence (SWN) and the Shapiro test to check if the residuals are normally distrributed (GWN).
+
+```{r,echo=T, fig.height=3}
+# Test for Strict White Noise with Box-Pierce Test (SWN). 
+#Our null in this case is independence so we are looking for a high p-value. 
+box_test = Box.test(s2_mod1$residuals,lag=10)
+box_test$p.value 
+# We accept the null hypothesis of independence, thus we have SWN.
+
+# Now we test for Guassian White Noise with the Shapiro test. 
+#The null in this case is normality so we again are looking for a large p-value.
+st = shapiro.test(s2_mod1$residuals) 
+# p-Value is 0.8236. 
+#We accept the null hypothesis of normality and thus, we have Guassian White Noise. 
+
+# We can be certain that the residuals contain no information that we could use to forecast,i.e., 
+#our model fit is good. Thus, we can confidently move onto the next part and forecast with our model. 
+```
+
+##Step 5 - Forecast
+We  compare the prediction for the 5 values in the series we held out. The results indicate the model is not too far from the hold-out values.
+```{r,echo=F}
+s2_pred = predict(s2_mod1)
+s2_pred$pred
+tail(series2$unemployed,5)
+ts.plot(s2_pred)
+```
+
+We also run point forecasts and the confidence intervals for the 5 held out data points.
+```{r,echo=F}
+s2_fcast = forecast(s2_mod1,h = 5)
+s2_fcast
+```
+
+##Steps/horizons to converge to the unconditional mean?
+Looking at the forecast for 10 forecasts into the future, we see that the forecasts converge to the unconditional mean after 6 steps/horizons.
+```{r,echo=F}
+forecast(s2_mod1,h = 10)
+```
